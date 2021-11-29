@@ -1,0 +1,17 @@
+[package]
+name = "rustpyppr"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[lib]
+name = "rustpyppr"
+crate-type = ["cdylib"]
+
+[dependencies.pyo3]
+version = "0.12.4"
+features = ["extension-module"]
+
+[dependencies]
+

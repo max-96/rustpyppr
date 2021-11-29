@@ -68,7 +68,8 @@ fn forward_push_ppr_vec(
     grown.insert(source_index);
 
     while avail_mass > r_max {
-        let grown_copy: HashSet<usize> = mem::take(&mut grown);
+        let grown_copy: HashSet<usize> =
+            mem::replace(&mut grown, HashSet::with_capacity(edge_dict_len));
         for k in grown_copy {
             /*if avail_mass < r_max {
                 break;
@@ -105,7 +106,7 @@ fn forward_push_ppr_vec_lazy(
 ) -> PyResult<HashMap<u32, f64>> {
     let r_max = r_max.max(f64::EPSILON); // cap the r_max to epsilon
 
-    let edge_dict_len = edge_dict.len().max(512);
+    let edge_dict_len = edge_dict.len().max(256);
     // we first need to translate into vectors
 
     // give each node an index so to shrink the size

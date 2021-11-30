@@ -26,7 +26,7 @@ use std::mem;
 */
 
 #[pyfunction]
-fn forward_push_ppr_vec(
+pub fn forward_push_ppr_vec(
     edge_dict: HashMap<u32, Vec<u32>>,
     source: u32,
     damping_factor: f64,
@@ -62,14 +62,13 @@ fn forward_push_ppr_vec(
     let conversion_coefficient = 1.0 - damping_factor;
     let mut p: Vec<f64> = vec![0.0; edge_dict_len];
     let mut r: Vec<f64> = vec![0.0; edge_dict_len];
-    let mut grown: HashSet<usize> = HashSet::with_capacity(edge_dict_len);
+    let mut grown: HashSet<usize> = HashSet::new();
     let mut avail_mass: f64 = 1.0;
     r[source_index] = 1.0;
     grown.insert(source_index);
 
     while avail_mass > r_max {
-        let grown_copy: HashSet<usize> =
-            mem::replace(&mut grown, HashSet::with_capacity(edge_dict_len));
+        let grown_copy: HashSet<usize> = mem::take(&mut grown);
         for k in grown_copy {
             /*if avail_mass < r_max {
                 break;
@@ -98,7 +97,22 @@ fn forward_push_ppr_vec(
 }
 
 #[pyfunction]
-fn forward_push_ppr_vec_lazy(
+/// Computes the Personalized PageRank using Forward Push in an efficient way.
+///
+/// Nodes that are visited are converted in indices, allowing fast lookup using a vector instead of HashMap.
+/// # Arguments
+/// * `edge_dict` - Dictionary mapping each node (positive integer) to the list of its neighbouring nodes (also positive integers).
+/// * `source` - The node from which the PPR starts.
+/// * `damping_factor` - The parameter that controls the probability of the random surfer to continue surfing. Typically 0.85.
+/// * `r_max` - controls the precision of the calculation. The computation will stop when at most `r_max` residual probability is left in total in the nodes.
+/// # Examples
+///
+/// ``` Python
+/// d = {3:[5, 1], 1:[3], 5:[3]}
+/// source = 3
+/// ppr = forward_push_ppr_vec_lazy(d, source, 0.85, 1e-2)
+///
+pub fn forward_push_ppr_vec_lazy(
     edge_dict: HashMap<u32, Vec<u32>>,
     source: u32,
     damping_factor: f64,
@@ -106,7 +120,7 @@ fn forward_push_ppr_vec_lazy(
 ) -> PyResult<HashMap<u32, f64>> {
     let r_max = r_max.max(f64::EPSILON); // cap the r_max to epsilon
 
-    let edge_dict_len = edge_dict.len().max(256);
+    let edge_dict_len = edge_dict.len();
     // we first need to translate into vectors
 
     // give each node an index so to shrink the size
@@ -135,14 +149,12 @@ fn forward_push_ppr_vec_lazy(
         &mut r,
     );
 
-    let mut grown: HashSet<usize> = HashSet::with_capacity(edge_dict_len);
+    let mut grown: HashSet<usize> = HashSet::new();
     grown.insert(0);
     let mut avail_mass: f64 = 1.0;
 
     while avail_mass > r_max {
-        let grown_cap = grown.capacity();
-        let grown_copy: HashSet<usize> =
-            mem::replace(&mut grown, HashSet::with_capacity(grown_cap));
+        let grown_copy = mem::take(&mut grown);
         for k in grown_copy {
             let neighbourhood = &edge_list[k];
             let neighbourhood = match neighbourhood {
@@ -199,11 +211,11 @@ fn update_edge_list<'a>(
     let additional = edge_dict[&node_name].len();
     let mut neighbours = Vec::with_capacity(additional);
     // increases the size to avoid reallocating during the stuff
-    name_to_index.reserve(additional);
-    index_to_name.reserve(additional);
-    edge_list.reserve(additional);
-    p.reserve(additional);
-    r.reserve(additional);
+    // name_to_index.reserve(additional);
+    // index_to_name.reserve(additional);
+    // edge_list.reserve(additional);
+    // p.reserve(additional);
+    // r.reserve(additional);
 
     for v_name in &edge_dict[&node_name] {
         if name_to_index.contains_key(v_name) {
@@ -225,7 +237,7 @@ fn update_edge_list<'a>(
 }
 
 #[pyfunction]
-fn forward_push_ppr(
+pub fn forward_push_ppr(
     edge_dict: HashMap<u32, Vec<u32>>,
     source: u32,
     damping_factor: f64,
@@ -236,13 +248,13 @@ fn forward_push_ppr(
     let conversion_coefficient = 1.0 - damping_factor;
     let mut p: HashMap<u32, f64> = HashMap::with_capacity(edge_dict.len());
     let mut r: HashMap<u32, f64> = HashMap::with_capacity(edge_dict.len());
-    let mut grown: HashSet<u32> = HashSet::with_capacity(edge_dict.len());
+    let mut grown: HashSet<u32> = HashSet::new();
     let mut avail_mass: f64 = 1.0;
     r.insert(source, 1.0);
     grown.insert(source);
 
     while avail_mass > r_max {
-        let grown_copy: HashSet<u32> = grown.drain().collect();
+        let grown_copy: HashSet<u32> = mem::take(&mut grown);
         for k in grown_copy {
             /*if avail_mass < r_max {
                 return Ok(p);

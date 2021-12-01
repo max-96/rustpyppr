@@ -28,10 +28,23 @@ use std::thread;
 */
 
 #[pyfunction]
+#[text_signature = "(edge_dict, sources, damping_factor, r_max)"]
 /// Performs multiple forward push ppr on the same graph with different sources.
 ///
 /// The result is equivalent to calling the regular forward_push_ppr function sequentially.
-/// However, the results are computed in parallel.
+/// However, the results are computed in parallel. Performs parallel calls to [forward_push_ppr_vec].
+/// # Arguments
+/// * `edge_dict` - Dictionary mapping each node (positive integer) to the list of its neighbouring nodes (also positive integers).
+/// * `sources` - The list of nodes from which the PPR computations start.
+/// * `damping_factor` - The parameter that controls the probability of the random surfer to continue surfing. Typically 0.85.
+/// * `r_max` - controls the precision of the calculation. The computation will stop when at most `r_max` residual probability is left in total in the nodes.
+/// # Examples
+///
+/// ```Python
+/// d = {3:[5, 1], 1:[3], 5:[3]}
+/// sources = [3, 5]
+/// ppr = multiple_forward_push_ppr_vec(d, sources, 0.85, 1e-2)
+/// ```
 pub fn multiple_forward_push_ppr_vec(
     edge_dict: HashMap<u32, Vec<u32>>,
     sources: Vec<u32>,
@@ -66,10 +79,23 @@ pub fn multiple_forward_push_ppr_vec(
 }
 
 #[pyfunction]
+#[text_signature = "(edge_dict, sources, damping_factor, r_max)"]
 /// Performs multiple forward push ppr on the same graph with different sources.
 ///
 /// The result is equivalent to calling the regular forward_push_ppr function sequentially.
-/// However, the results are computed in parallel.
+/// However, the results are computed in parallel. Performs parallel calls to [forward_push_ppr_vec_lazy].
+/// # Arguments
+/// * `edge_dict` - Dictionary mapping each node (positive integer) to the list of its neighbouring nodes (also positive integers).
+/// * `sources` - The list of nodes from which the PPR computations start.
+/// * `damping_factor` - The parameter that controls the probability of the random surfer to continue surfing. Typically 0.85.
+/// * `r_max` - controls the precision of the calculation. The computation will stop when at most `r_max` residual probability is left in total in the nodes.
+/// # Examples
+///
+/// ```Python
+/// d = {3:[5, 1], 1:[3], 5:[3]}
+/// sources = [3, 5]
+/// ppr = multiple_forward_push_ppr_vec_lazy(d, sources, 0.85, 1e-2)
+/// ```
 pub fn multiple_forward_push_ppr_vec_lazy(
     edge_dict: HashMap<u32, Vec<u32>>,
     sources: Vec<u32>,
@@ -80,7 +106,7 @@ pub fn multiple_forward_push_ppr_vec_lazy(
     let num_sources = sources.len();
     let mut join_handles = Vec::with_capacity(num_sources);
     let num_threads = 8; // the least between the two
-    let chunk_size = (num_sources as f32 / num_threads as f32).ceil() as usize;
+    let chunk_size = (num_sources as f32 / num_threads as f32).floor().max(1.0) as usize;
     let chunks: Vec<&[u32]> = sources.chunks(chunk_size).collect();
     for chunk in chunks {
         let ref_edge_dict = Arc::clone(&edge_dict);
@@ -104,6 +130,24 @@ pub fn multiple_forward_push_ppr_vec_lazy(
 }
 
 #[pyfunction]
+#[text_signature = "(edge_dict, source, damping_factor, r_max)"]
+/// Computes the Personalized PageRank using Forward Push.
+///
+/// Nodes that are visited are converted in indices, allowing fast lookup using a vector instead of HashMap.
+/// This conversion is done for all nodes eagerly. See [forward_push_ppr_vec_lazy] for the lazy version.
+/// # Arguments
+/// * `edge_dict` - Dictionary mapping each node (positive integer) to the list of its neighbouring nodes (also positive integers).
+/// * `source` - The node from which the PPR starts.
+/// * `damping_factor` - The parameter that controls the probability of the random surfer to continue surfing. Typically 0.85.
+/// * `r_max` - controls the precision of the calculation. The computation will stop when at most `r_max` residual probability is left in total in the nodes.
+/// # Examples
+///
+/// ```Python
+/// d = {3:[5, 1], 1:[3], 5:[3]}
+/// source = 3
+/// ppr = forward_push_ppr_vec(d, source, 0.85, 1e-2)
+/// ```
+///
 pub fn forward_push_ppr_vec(
     edge_dict: HashMap<u32, Vec<u32>>,
     source: u32,
@@ -117,6 +161,21 @@ pub fn forward_push_ppr_vec(
         r_max,
     ))
 }
+// struct Buffer {
+//     index: usize,
+//     max_size: usize,
+//     data: [(usize, f64); 32],
+// }
+//
+// impl Buffer {
+//     fn new() -> Buffer {
+//         Buffer {
+//             index: 0,
+//             max_size: 32,
+//             data: [(0, 0.0); 32],
+//         }
+//     }
+// }
 
 fn _forward_push_ppr_vec(
     edge_dict: &HashMap<u32, Vec<u32>>,
@@ -139,7 +198,7 @@ fn _forward_push_ppr_vec(
         .map(|(x, y)| (*y, x))
         .collect();
 
-    let mut edge_list: Vec<Vec<usize>> = Vec::with_capacity(edge_dict_len); // this can be sped up with slices (1-D representation)
+    let mut edge_list: Vec<Vec<usize>> = Vec::with_capacity(edge_dict_len);
     for k in &index_to_name {
         let v: Vec<usize> = edge_dict[k]
             .iter()
@@ -178,7 +237,6 @@ fn _forward_push_ppr_vec(
             }
         }
     }
-    //let converted_p: HashMap<u32, f64> = p.iter().enumerate().map(|(x, y)| (index_to_name[x], *y)).collect();
     p.iter()
         .enumerate()
         .map(|(x, y)| (index_to_name[x], *y))
@@ -186,9 +244,13 @@ fn _forward_push_ppr_vec(
 }
 
 #[pyfunction]
+#[text_signature = "(edge_dict, source, damping_factor, r_max)"]
 /// Computes the Personalized PageRank using Forward Push in an efficient way.
 ///
 /// Nodes that are visited are converted in indices, allowing fast lookup using a vector instead of HashMap.
+/// This conversion is done for only for the nodes the algorithm encounters, in a lazy way.
+/// See [forward_push_ppr_vec] for the eager version.
+///
 /// # Arguments
 /// * `edge_dict` - Dictionary mapping each node (positive integer) to the list of its neighbouring nodes (also positive integers).
 /// * `source` - The node from which the PPR starts.
@@ -196,10 +258,11 @@ fn _forward_push_ppr_vec(
 /// * `r_max` - controls the precision of the calculation. The computation will stop when at most `r_max` residual probability is left in total in the nodes.
 /// # Examples
 ///
-/// ``` Python
+/// ```Python3
 /// d = {3:[5, 1], 1:[3], 5:[3]}
 /// source = 3
 /// ppr = forward_push_ppr_vec_lazy(d, source, 0.85, 1e-2)
+/// ```
 ///
 pub fn forward_push_ppr_vec_lazy(
     edge_dict: HashMap<u32, Vec<u32>>,
@@ -300,13 +363,12 @@ fn _forward_push_ppr_vec_lazy(
 }
 
 // function to update the bookkeeping dictionary and the other things in the lazy way
-#[inline]
-fn update_edge_list<'a>(
+fn update_edge_list(
     node: usize,
     edge_dict: &HashMap<u32, Vec<u32>>,
     index_to_name: &mut Vec<u32>,
     name_to_index: &mut HashMap<u32, usize>,
-    edge_list: &'a mut Vec<Option<Vec<usize>>>,
+    edge_list: &mut Vec<Option<Vec<usize>>>,
     p: &mut Vec<f64>,
     r: &mut Vec<f64>,
 ) -> () {
@@ -315,13 +377,6 @@ fn update_edge_list<'a>(
 
     let additional = edge_dict[&node_name].len();
     let mut neighbours = Vec::with_capacity(additional);
-    // increases the size to avoid reallocating during the stuff
-    // name_to_index.reserve(additional);
-    // index_to_name.reserve(additional);
-    // edge_list.reserve(additional);
-    // p.reserve(additional);
-    // r.reserve(additional);
-
     for v_name in &edge_dict[&node_name] {
         if name_to_index.contains_key(v_name) {
             //no update necessary
@@ -342,6 +397,29 @@ fn update_edge_list<'a>(
 }
 
 #[pyfunction]
+#[text_signature = "(edge_dict, source, damping_factor, r_max)"]
+/// Computes the Personalized PageRank using Forward Push.
+///
+/// In this version, no conversion from node to index takes place.
+/// For the lookup of the neighbours of a node, it uses `edge_dict` (HashMap).
+/// Although both HashMap and Vector lookups are **O(1)** in theory, the HashMap lookup is more slow.
+/// This version is almost twice slower than the vector versions ([forward_push_ppr_vec], [forward_push_ppr_vec_lazy]).
+/// However, the vector takes extra space in memory that this version does not require.
+/// Thus, this version is only suggested when the vector versions fail due to memory limitations.
+///
+/// # Arguments
+/// * `edge_dict` - Dictionary mapping each node (positive integer) to the list of its neighbouring nodes (also positive integers).
+/// * `source` - The node from which the PPR starts.
+/// * `damping_factor` - The parameter that controls the probability of the random surfer to continue surfing. Typically 0.85.
+/// * `r_max` - controls the precision of the calculation. The computation will stop when at most `r_max` residual probability is left in total in the nodes.
+/// # Examples
+///
+/// ```Python
+/// d = {3:[5, 1], 1:[3], 5:[3]}
+/// source = 3
+/// ppr = forward_push_ppr(d, source, 0.85, 1e-2)
+/// ```
+///
 pub fn forward_push_ppr(
     edge_dict: HashMap<u32, Vec<u32>>,
     source: u32,
@@ -382,6 +460,7 @@ pub fn forward_push_ppr(
 }
 
 #[pymodule]
+#[doc(hidden)]
 fn rustpyppr(_py: Python, m: &PyModule) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(forward_push_ppr, m)?)?;
     m.add_function(wrap_pyfunction!(forward_push_ppr_vec, m)?)?;

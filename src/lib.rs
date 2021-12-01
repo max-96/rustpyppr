@@ -2,6 +2,7 @@ use pyo3::prelude::*;
 use pyo3::wrap_pyfunction;
 use std::collections::{HashMap, HashSet};
 use std::mem;
+use std::ops::Index;
 use std::sync::Arc;
 use std::thread;
 
@@ -117,7 +118,50 @@ pub fn forward_push_ppr_vec(
         r_max,
     ))
 }
+#[derive(Debug)]
+struct EdgeList {
+    underlying: Vec<usize>,
+    slice_list: Vec<(usize, usize)>,
+}
 
+impl EdgeList {
+    fn new() -> Self {
+        EdgeList {
+            underlying: Vec::new(),
+            slice_list: Vec::new(),
+        }
+    }
+    #[inline]
+    fn with_capacity(capacity1: usize, capacity2: usize) -> Self {
+        EdgeList {
+            underlying: Vec::with_capacity(capacity1),
+            slice_list: Vec::with_capacity(capacity2),
+        }
+    }
+    #[inline]
+    fn add_adjacency(&mut self, node_adj: &[usize]) -> usize {
+        let node_index = self.slice_list.len();
+        let start_index = self.underlying.len();
+        let node_adj_len = node_adj.len();
+        self.underlying.extend(node_adj);
+        self.slice_list
+            .push((start_index, start_index + node_adj_len));
+        node_index
+    }
+    // fn get_adjacency(&self, node_index: usize) -> &[usize] {
+    //     let (start_index, end_index) = self.slice_list[node_index];
+    //     &self.underlying[start_index..end_index]
+    // }
+}
+
+impl Index<usize> for EdgeList {
+    type Output = [usize];
+    #[inline]
+    fn index(&self, node_index: usize) -> &Self::Output {
+        let (start_index, end_index) = self.slice_list[node_index];
+        &self.underlying[start_index..end_index]
+    }
+}
 fn _forward_push_ppr_vec(
     edge_dict: &HashMap<u32, Vec<u32>>,
     source: u32,
@@ -139,13 +183,22 @@ fn _forward_push_ppr_vec(
         .map(|(x, y)| (*y, x))
         .collect();
 
-    let mut edge_list: Vec<Vec<usize>> = Vec::with_capacity(edge_dict_len); // this can be sped up with slices (1-D representation)
-    for k in &index_to_name {
-        let v: Vec<usize> = edge_dict[k]
+    // let mut edge_list: Vec<Vec<usize>> = Vec::with_capacity(edge_dict_len); // this can be sped up with slices (1-D representation)
+    // for k in &index_to_name {
+    //     let v: Vec<usize> = edge_dict[k]
+    //         .iter()
+    //         .map(|name| name_to_index[name])
+    //         .collect();
+    //     edge_list.push(v);
+    // }
+    let mut edge_list: EdgeList = EdgeList::with_capacity(edge_dict_len * 10, edge_dict_len);
+    for &k in &index_to_name {
+        let v: Vec<usize> = edge_dict[&k]
             .iter()
             .map(|name| name_to_index[name])
             .collect();
-        edge_list.push(v);
+        let given_index = edge_list.add_adjacency(&v);
+        assert_eq!(given_index, name_to_index[&k]);
     }
     let edge_list = edge_list;
 

@@ -26,12 +26,41 @@ use std::mem;
 */
 
 #[pyfunction]
+#[allow(unused_variables)]
+/// Performs multiple forward push ppr on the same graph with different sources.
+///
+/// The result is equivalent to calling the regular forward_push_ppr function sequentially.
+/// However, the results are computed in parallel (hopefully).
+pub fn multiple_forward_push_ppr(
+    edge_dict: HashMap<u32, Vec<u32>>,
+    sources: Vec<u32>,
+    damping_factor: f64,
+    r_max: f64,
+) -> PyResult<HashMap<u32, HashMap<u32, f64>>> {
+    todo!();
+}
+
+#[pyfunction]
 pub fn forward_push_ppr_vec(
     edge_dict: HashMap<u32, Vec<u32>>,
     source: u32,
     damping_factor: f64,
     r_max: f64,
 ) -> PyResult<HashMap<u32, f64>> {
+    Ok(_forward_push_ppr_vec(
+        &edge_dict,
+        source,
+        damping_factor,
+        r_max,
+    ))
+}
+
+fn _forward_push_ppr_vec(
+    edge_dict: &HashMap<u32, Vec<u32>>,
+    source: u32,
+    damping_factor: f64,
+    r_max: f64,
+) -> HashMap<u32, f64> {
     let r_max = r_max.max(f64::EPSILON); // cap the r_max to epsilon
 
     let edge_dict_len = edge_dict.len();
@@ -62,19 +91,17 @@ pub fn forward_push_ppr_vec(
     let conversion_coefficient = 1.0 - damping_factor;
     let mut p: Vec<f64> = vec![0.0; edge_dict_len];
     let mut r: Vec<f64> = vec![0.0; edge_dict_len];
-    let mut grown: HashSet<usize> = HashSet::new();
-    let mut avail_mass: f64 = 1.0;
     r[source_index] = 1.0;
+    let mut grown = HashSet::new();
     grown.insert(source_index);
+    let mut avail_mass: f64 = 1.0;
 
     while avail_mass > r_max {
-        let grown_copy: HashSet<usize> = mem::take(&mut grown);
+        let grown_capacity = grown.capacity();
+        let grown_copy: HashSet<usize> =
+            mem::replace(&mut grown, HashSet::with_capacity(grown_capacity));
         for k in grown_copy {
-            /*if avail_mass < r_max {
-                break;
-            }*/
             let res = mem::take(&mut r[k]);
-            //r[k] = 0.0;
 
             let add_p = conversion_coefficient * res;
             p[k] += add_p;
@@ -83,17 +110,16 @@ pub fn forward_push_ppr_vec(
             let neighbourhood = &edge_list[k];
             let w = (damping_factor * res) / (neighbourhood.len() as f64);
             for &u in neighbourhood {
-                // println!("{}", u);
                 r[u] += w;
                 grown.insert(u);
             }
         }
     }
     //let converted_p: HashMap<u32, f64> = p.iter().enumerate().map(|(x, y)| (index_to_name[x], *y)).collect();
-    Ok(p.iter()
+    p.iter()
         .enumerate()
         .map(|(x, y)| (index_to_name[x], *y))
-        .collect())
+        .collect()
 }
 
 #[pyfunction]
@@ -154,7 +180,9 @@ pub fn forward_push_ppr_vec_lazy(
     let mut avail_mass: f64 = 1.0;
 
     while avail_mass > r_max {
-        let grown_copy = mem::take(&mut grown);
+        let grown_capacity = grown.capacity();
+        let grown_copy: HashSet<usize> =
+            mem::replace(&mut grown, HashSet::with_capacity(grown_capacity));
         for k in grown_copy {
             let neighbourhood = &edge_list[k];
             let neighbourhood = match neighbourhood {

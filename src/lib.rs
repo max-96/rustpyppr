@@ -37,7 +37,16 @@ pub fn multiple_forward_push_ppr(
     damping_factor: f64,
     r_max: f64,
 ) -> PyResult<HashMap<u32, HashMap<u32, f64>>> {
-    todo!();
+    // placeholder sequential implementation. Still reduces the overhead of multiple calls
+    return Ok(sources
+        .into_iter()
+        .map(|source| {
+            (
+                source,
+                _forward_push_ppr_vec(&edge_dict, source, damping_factor, r_max),
+            )
+        })
+        .collect());
 }
 
 #[pyfunction]
@@ -304,12 +313,12 @@ pub fn forward_push_ppr(
     Ok(p)
 }
 
-/// A Python module implemented in Rust.
 #[pymodule]
 fn rustpyppr(_py: Python, m: &PyModule) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(forward_push_ppr, m)?)?;
     m.add_function(wrap_pyfunction!(forward_push_ppr_vec, m)?)?;
     m.add_function(wrap_pyfunction!(forward_push_ppr_vec_lazy, m)?)?;
+    m.add_function(wrap_pyfunction!(multiple_forward_push_ppr, m)?)?;
 
     Ok(())
 }

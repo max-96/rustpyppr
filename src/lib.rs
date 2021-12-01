@@ -2,6 +2,8 @@ use pyo3::prelude::*;
 use pyo3::wrap_pyfunction;
 use std::collections::{HashMap, HashSet};
 use std::mem;
+use std::sync::Arc;
+use std::thread;
 
 /*
     P = defaultdict(float)
@@ -26,27 +28,47 @@ use std::mem;
 */
 
 #[pyfunction]
-#[allow(unused_variables)]
 /// Performs multiple forward push ppr on the same graph with different sources.
 ///
 /// The result is equivalent to calling the regular forward_push_ppr function sequentially.
 /// However, the results are computed in parallel (hopefully).
-pub fn multiple_forward_push_ppr(
+pub fn multiple_forward_push_ppr_vec(
     edge_dict: HashMap<u32, Vec<u32>>,
     sources: Vec<u32>,
     damping_factor: f64,
     r_max: f64,
 ) -> PyResult<HashMap<u32, HashMap<u32, f64>>> {
     // placeholder sequential implementation. Still reduces the overhead of multiple calls
-    return Ok(sources
-        .into_iter()
-        .map(|source| {
-            (
-                source,
-                _forward_push_ppr_vec(&edge_dict, source, damping_factor, r_max),
-            )
-        })
-        .collect());
+    let edge_dict = Arc::new(edge_dict);
+    let mut join_handles = Vec::with_capacity(sources.len());
+    // let num_threads = sources.len().min(12); // the least between the two
+    // let chunk_size = sources.len() as f32 / num_threads as f32;
+
+    for source in sources {
+        let ref_edge_dict = Arc::clone(&edge_dict);
+        let handle = thread::spawn(move || {
+            let p = _forward_push_ppr_vec(&ref_edge_dict, source, damping_factor, r_max);
+            (source, p)
+        });
+        join_handles.push(handle);
+    }
+    let mut pprs = HashMap::new();
+    for handle in join_handles {
+        let (source, ppr) = handle.join().unwrap();
+        pprs.insert(source, ppr);
+    }
+    Ok(pprs)
+
+    // return Ok(sources
+    //     .into_iter()
+    //     .map(|source| {
+    //         (
+    //             source,
+    //             _forward_push_ppr_vec(&edge_dict, source, damping_factor, r_max),
+    //         )
+    //     })
+    //     .collect());
+    // todo!();
 }
 
 #[pyfunction]
@@ -318,7 +340,7 @@ fn rustpyppr(_py: Python, m: &PyModule) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(forward_push_ppr, m)?)?;
     m.add_function(wrap_pyfunction!(forward_push_ppr_vec, m)?)?;
     m.add_function(wrap_pyfunction!(forward_push_ppr_vec_lazy, m)?)?;
-    m.add_function(wrap_pyfunction!(multiple_forward_push_ppr, m)?)?;
+    m.add_function(wrap_pyfunction!(multiple_forward_push_ppr_vec, m)?)?;
 
     Ok(())
 }

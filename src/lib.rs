@@ -31,44 +31,76 @@ use std::thread;
 /// Performs multiple forward push ppr on the same graph with different sources.
 ///
 /// The result is equivalent to calling the regular forward_push_ppr function sequentially.
-/// However, the results are computed in parallel (hopefully).
+/// However, the results are computed in parallel.
 pub fn multiple_forward_push_ppr_vec(
     edge_dict: HashMap<u32, Vec<u32>>,
     sources: Vec<u32>,
     damping_factor: f64,
     r_max: f64,
 ) -> PyResult<HashMap<u32, HashMap<u32, f64>>> {
-    // placeholder sequential implementation. Still reduces the overhead of multiple calls
     let edge_dict = Arc::new(edge_dict);
-    let mut join_handles = Vec::with_capacity(sources.len());
-    // let num_threads = sources.len().min(12); // the least between the two
-    // let chunk_size = sources.len() as f32 / num_threads as f32;
-
-    for source in sources {
+    let num_sources = sources.len();
+    let mut join_handles = Vec::with_capacity(num_sources);
+    let num_threads = 8; // the least between the two
+    let chunk_size = (num_sources as f32 / num_threads as f32).ceil() as usize;
+    let chunks: Vec<&[u32]> = sources.chunks(chunk_size).collect();
+    for chunk in chunks {
         let ref_edge_dict = Arc::clone(&edge_dict);
+        let chunk = chunk.to_vec();
         let handle = thread::spawn(move || {
-            let p = _forward_push_ppr_vec(&ref_edge_dict, source, damping_factor, r_max);
-            (source, p)
+            let mut results = Vec::with_capacity(chunk_size);
+            for source in chunk {
+                let p = _forward_push_ppr_vec(&ref_edge_dict, source, damping_factor, r_max);
+                results.push((source, p));
+            }
+            results
         });
         join_handles.push(handle);
     }
     let mut pprs = HashMap::new();
     for handle in join_handles {
-        let (source, ppr) = handle.join().unwrap();
-        pprs.insert(source, ppr);
+        let result = handle.join().unwrap();
+        pprs.extend(result.into_iter());
     }
     Ok(pprs)
+}
 
-    // return Ok(sources
-    //     .into_iter()
-    //     .map(|source| {
-    //         (
-    //             source,
-    //             _forward_push_ppr_vec(&edge_dict, source, damping_factor, r_max),
-    //         )
-    //     })
-    //     .collect());
-    // todo!();
+#[pyfunction]
+/// Performs multiple forward push ppr on the same graph with different sources.
+///
+/// The result is equivalent to calling the regular forward_push_ppr function sequentially.
+/// However, the results are computed in parallel.
+pub fn multiple_forward_push_ppr_vec_lazy(
+    edge_dict: HashMap<u32, Vec<u32>>,
+    sources: Vec<u32>,
+    damping_factor: f64,
+    r_max: f64,
+) -> PyResult<HashMap<u32, HashMap<u32, f64>>> {
+    let edge_dict = Arc::new(edge_dict);
+    let num_sources = sources.len();
+    let mut join_handles = Vec::with_capacity(num_sources);
+    let num_threads = 8; // the least between the two
+    let chunk_size = (num_sources as f32 / num_threads as f32).ceil() as usize;
+    let chunks: Vec<&[u32]> = sources.chunks(chunk_size).collect();
+    for chunk in chunks {
+        let ref_edge_dict = Arc::clone(&edge_dict);
+        let chunk = chunk.to_vec();
+        let handle = thread::spawn(move || {
+            let mut results = Vec::with_capacity(chunk_size);
+            for source in chunk {
+                let p = _forward_push_ppr_vec_lazy(&ref_edge_dict, source, damping_factor, r_max);
+                results.push((source, p));
+            }
+            results
+        });
+        join_handles.push(handle);
+    }
+    let mut pprs = HashMap::new();
+    for handle in join_handles {
+        let result = handle.join().unwrap();
+        pprs.extend(result.into_iter());
+    }
+    Ok(pprs)
 }
 
 #[pyfunction]
@@ -107,7 +139,7 @@ fn _forward_push_ppr_vec(
         .map(|(x, y)| (*y, x))
         .collect();
 
-    let mut edge_list: Vec<Vec<usize>> = Vec::with_capacity(edge_dict_len);
+    let mut edge_list: Vec<Vec<usize>> = Vec::with_capacity(edge_dict_len); // this can be sped up with slices (1-D representation)
     for k in &index_to_name {
         let v: Vec<usize> = edge_dict[k]
             .iter()
@@ -175,6 +207,21 @@ pub fn forward_push_ppr_vec_lazy(
     damping_factor: f64,
     r_max: f64,
 ) -> PyResult<HashMap<u32, f64>> {
+    Ok(_forward_push_ppr_vec_lazy(
+        &edge_dict,
+        source,
+        damping_factor,
+        r_max,
+    ))
+}
+
+#[inline]
+fn _forward_push_ppr_vec_lazy(
+    edge_dict: &HashMap<u32, Vec<u32>>,
+    source: u32,
+    damping_factor: f64,
+    r_max: f64,
+) -> HashMap<u32, f64> {
     let r_max = r_max.max(f64::EPSILON); // cap the r_max to epsilon
 
     let edge_dict_len = edge_dict.len();
@@ -246,11 +293,10 @@ pub fn forward_push_ppr_vec_lazy(
             }
         }
     }
-    //let converted_p: HashMap<u32, f64> = p.iter().enumerate().map(|(x, y)| (index_to_name[x], *y)).collect();
-    Ok(p.iter()
+    p.iter()
         .enumerate()
         .map(|(x, y)| (index_to_name[x], *y))
-        .collect())
+        .collect()
 }
 
 // function to update the bookkeeping dictionary and the other things in the lazy way
@@ -341,6 +387,7 @@ fn rustpyppr(_py: Python, m: &PyModule) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(forward_push_ppr_vec, m)?)?;
     m.add_function(wrap_pyfunction!(forward_push_ppr_vec_lazy, m)?)?;
     m.add_function(wrap_pyfunction!(multiple_forward_push_ppr_vec, m)?)?;
+    m.add_function(wrap_pyfunction!(multiple_forward_push_ppr_vec_lazy, m)?)?;
 
     Ok(())
 }

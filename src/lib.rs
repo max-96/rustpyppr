@@ -161,21 +161,6 @@ pub fn forward_push_ppr_vec(
         r_max,
     ))
 }
-// struct Buffer {
-//     index: usize,
-//     max_size: usize,
-//     data: [(usize, f64); 32],
-// }
-//
-// impl Buffer {
-//     fn new() -> Buffer {
-//         Buffer {
-//             index: 0,
-//             max_size: 32,
-//             data: [(0, 0.0); 32],
-//         }
-//     }
-// }
 
 fn _forward_push_ppr_vec(
     edge_dict: &HashMap<u32, Vec<u32>>,
@@ -217,6 +202,7 @@ fn _forward_push_ppr_vec(
     let mut grown = HashSet::new();
     grown.insert(source_index);
     let mut avail_mass: f64 = 1.0;
+    let mut buffer_p = Buffer::new();
 
     while avail_mass > r_max {
         let grown_capacity = grown.capacity();
@@ -226,7 +212,8 @@ fn _forward_push_ppr_vec(
             let res = mem::take(&mut r[k]);
 
             let add_p = conversion_coefficient * res;
-            p[k] += add_p;
+            buffer_p.add_or_flush((k, add_p), &mut p);
+            // p[k] += add_p;
             avail_mass -= add_p;
 
             let neighbourhood = &edge_list[k];
@@ -237,10 +224,46 @@ fn _forward_push_ppr_vec(
             }
         }
     }
+    buffer_p.flush(&mut p);
     p.iter()
         .enumerate()
         .map(|(x, y)| (index_to_name[x], *y))
         .collect()
+}
+
+// Buffer to keep intermediate results instead of directing working on the stack
+const BUFFER_MAX_SIZE: usize = 128;
+struct Buffer {
+    index: usize,
+    data: [(usize, f64); BUFFER_MAX_SIZE],
+}
+
+impl Buffer {
+    fn new() -> Buffer {
+        Buffer {
+            index: 0,
+            data: [(0, 0.0); BUFFER_MAX_SIZE],
+        }
+    }
+    #[inline]
+    /// The idea is to fill it up until possible, then emptying it into the vector P.
+    /// We want to avoid accessing multiple times the same location. Thus we will try to sort the
+    /// elements first and then
+    fn add_or_flush(&mut self, to_add: (usize, f64), vector: &mut [f64]) {
+        self.data[self.index] = to_add;
+        self.index += 1;
+        if self.index == BUFFER_MAX_SIZE {
+            self.flush(vector);
+        }
+    }
+    #[inline]
+    fn flush(&mut self, vector: &mut [f64]) {
+        // self.data.sort_unstable_by_key(|x| x.0); //in-place, should be faster
+        for &(address, value) in self.data.iter() {
+            vector[address] += value;
+        }
+        self.index = 0;
+    }
 }
 
 #[pyfunction]

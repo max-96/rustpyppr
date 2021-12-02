@@ -232,7 +232,8 @@ fn _forward_push_ppr_vec(
 }
 
 // Buffer to keep intermediate results instead of directing working on the stack
-const BUFFER_MAX_SIZE: usize = 128;
+const BUFFER_MAX_SIZE: usize = 8;
+#[derive(Copy, Clone, Debug)]
 struct Buffer {
     index: usize,
     data: [(usize, f64); BUFFER_MAX_SIZE],
@@ -258,11 +259,18 @@ impl Buffer {
     }
     #[inline]
     fn flush(&mut self, vector: &mut [f64]) {
-        // self.data.sort_unstable_by_key(|x| x.0); //in-place, should be faster
-        for &(address, value) in self.data.iter() {
-            vector[address] += value;
+        if self.index > 0{
+        self.data[..self.index].sort_unstable_by_key(|x| x.0); //in-place, should be faster
+        for i in 0..(self.index - 1) {
+            if self.data[i].0 == self.data[i + 1].0 {
+                self.data[i + 1].1 += self.data[i].1
+            } else {
+                vector[self.data[i].0] += self.data[i].1;
+            }
         }
+        vector[self.data[self.index - 1].0] += self.data[self.index - 1].1;
         self.index = 0;
+    }
     }
 }
 

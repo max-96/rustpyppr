@@ -402,7 +402,7 @@ fn update_edge_list(
 ///
 /// In this version, no conversion from node to index takes place.
 /// For the lookup of the neighbours of a node, it uses `edge_dict` (HashMap).
-/// Although both HashMap and Vector lookups are **O(1)** in theory, the HashMap lookup is more slow.
+/// Although both HashMap and Vector lookups are **O(1)** in theory, the HashMap lookup is slower.
 /// This version is almost twice slower than the vector versions ([forward_push_ppr_vec], [forward_push_ppr_vec_lazy]).
 /// However, the vector takes extra space in memory that this version does not require.
 /// Thus, this version is only suggested when the vector versions fail due to memory limitations.

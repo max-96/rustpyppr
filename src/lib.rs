@@ -1,9 +1,23 @@
+/*! This library provides functions for Python to compute [Personalized PageRank](https://arxiv.org/abs/2006.11876)
+scores in a graph. Personalized PageRank is similar to ordinary [PageRank](https://en.wikipedia.org/wiki/PageRank)
+but the node where the random surfer will start from (after a teleportation or in the beginning)
+is not sampled uniformly from all the nodes, but rather from a smaller subset of them. This subset,
+which is called Personalized Set, must contain at least 1 node.
+
+The implemented algorithms so far are various versions of Forward Push for single source.
+This means that given a source node, it is possible to compute the PPR scores of other ones w.r.t. the source node.
+
+Extension to multiple sources is likely to happen soon.
+
+!*/
 use pyo3::prelude::*;
 use pyo3::wrap_pyfunction;
 use std::collections::{HashMap, HashSet};
 use std::mem;
 use std::sync::Arc;
 use std::thread;
+
+// Rust Implementation of Personalized Page Rank algorithms for Python 3
 
 /*
     P = defaultdict(float)
@@ -131,35 +145,30 @@ pub fn multiple_forward_push_vec_lazy(
 
 #[pyfunction]
 #[text_signature = "(edge_dict, source, damping_factor, r_max)"]
-/// Computes the Personalized PageRank using Forward Push.
-///
-/// Nodes that are visited are converted in indices, allowing fast lookup using a vector instead of HashMap.
-/// This conversion is done for all nodes eagerly. See [forward_push_vec_lazy] for the lazy version.
-/// # Arguments
-/// * `edge_dict` - Dictionary mapping each node (positive integer) to the list of its neighbouring nodes (also positive integers).
-/// * `source` - The node from which the PPR starts.
-/// * `damping_factor` - The parameter that controls the probability of the random surfer to continue surfing. Typically 0.85.
-/// * `r_max` - controls the precision of the calculation. The computation will stop when at most `r_max` residual probability is left in total in the nodes.
-/// # Examples
-///
-/// ```Python
-/// d = {3:[5, 1], 1:[3], 5:[3]}
-/// source = 3
-/// ppr = forward_push_vec(d, source, 0.85, 1e-2)
-/// ```
-///
+/**Computes the Personalized PageRank using Forward Push, using vectors.
+
+ Nodes that are visited are converted in indices, allowing fast lookup using a vector instead of HashMap.
+ This conversion is done for all nodes eagerly. See [forward_push_vec_lazy] for the lazy version.
+ # Arguments
+ * `edge_dict` - Dictionary mapping each node (positive integer) to the list of its neighbouring nodes (also positive integers).
+ * `source` - The node from which the PPR starts.
+ * `damping_factor` - The parameter that controls the probability of the random surfer to continue surfing. Typically 0.85.
+ * `r_max` - controls the precision of the calculation. The computation will stop when at most `r_max` residual probability is left in total in the nodes.
+ # Examples
+
+ ```Python
+ d = {3:[5, 1], 1:[3], 5:[3]}
+ source = 3
+ ppr = forward_push_vec(d, source, 0.85, 1e-2)
+ ```
+**/
 pub fn forward_push_vec(
     edge_dict: HashMap<u32, Vec<u32>>,
     source: u32,
     damping_factor: f64,
     r_max: f64,
 ) -> PyResult<HashMap<u32, f64>> {
-    Ok(_forward_push_vec(
-        &edge_dict,
-        source,
-        damping_factor,
-        r_max,
-    ))
+    Ok(_forward_push_vec(&edge_dict, source, damping_factor, r_max))
 }
 // struct Buffer {
 //     index: usize,
@@ -245,25 +254,25 @@ fn _forward_push_vec(
 
 #[pyfunction]
 #[text_signature = "(edge_dict, source, damping_factor, r_max)"]
-/// Computes the Personalized PageRank using Forward Push in an efficient way.
-///
-/// Nodes that are visited are converted in indices, allowing fast lookup using a vector instead of HashMap.
-/// This conversion is done for only for the nodes the algorithm encounters, in a lazy way.
-/// See [forward_push_vec] for the eager version.
-///
-/// # Arguments
-/// * `edge_dict` - Dictionary mapping each node (positive integer) to the list of its neighbouring nodes (also positive integers).
-/// * `source` - The node from which the PPR starts.
-/// * `damping_factor` - The parameter that controls the probability of the random surfer to continue surfing. Typically 0.85.
-/// * `r_max` - controls the precision of the calculation. The computation will stop when at most `r_max` residual probability is left in total in the nodes.
-/// # Examples
-///
-/// ```Python3
-/// d = {3:[5, 1], 1:[3], 5:[3]}
-/// source = 3
-/// ppr = forward_push_vec_lazy(d, source, 0.85, 1e-2)
-/// ```
-///
+/** Computes the Personalized PageRank using Forward Push, using vectors lazily.
+
+ Nodes that are visited are converted in indices, allowing fast lookup using a vector instead of HashMap.
+ This conversion is done for only for the nodes the algorithm encounters, in a lazy way.
+ See [forward_push_vec] for the eager version.
+
+ # Arguments
+ * `edge_dict` - Dictionary mapping each node (positive integer) to the list of its neighbouring nodes (also positive integers).
+ * `source` - The node from which the PPR starts.
+ * `damping_factor` - The parameter that controls the probability of the random surfer to continue surfing. Typically 0.85.
+ * `r_max` - controls the precision of the calculation. The computation will stop when at most `r_max` residual probability is left in total in the nodes.
+ # Examples
+
+ ```Python3
+ d = {3:[5, 1], 1:[3], 5:[3]}
+ source = 3
+ ppr = forward_push_vec_lazy(d, source, 0.85, 1e-2)
+ ```
+**/
 pub fn forward_push_vec_lazy(
     edge_dict: HashMap<u32, Vec<u32>>,
     source: u32,
@@ -398,28 +407,28 @@ fn update_edge_list(
 
 #[pyfunction]
 #[text_signature = "(edge_dict, source, damping_factor, r_max)"]
-/// Computes the Personalized PageRank using Forward Push.
-///
-/// In this version, no conversion from node to index takes place.
-/// For the lookup of the neighbours of a node, it uses `edge_dict` (HashMap).
-/// Although both HashMap and Vector lookups are **O(1)** in theory, the HashMap lookup is slower.
-/// This version is almost twice slower than the vector versions ([forward_push_vec], [forward_push_vec_lazy]).
-/// However, the vector takes extra space in memory that this version does not require.
-/// Thus, this version is only suggested when the vector versions fail due to memory limitations.
-///
-/// # Arguments
-/// * `edge_dict` - Dictionary mapping each node (positive integer) to the list of its neighbouring nodes (also positive integers).
-/// * `source` - The node from which the PPR starts.
-/// * `damping_factor` - The parameter that controls the probability of the random surfer to continue surfing. Typically 0.85.
-/// * `r_max` - controls the precision of the calculation. The computation will stop when at most `r_max` residual probability is left in total in the nodes.
-/// # Examples
-///
-/// ```Python
-/// d = {3:[5, 1], 1:[3], 5:[3]}
-/// source = 3
-/// ppr = forward_push(d, source, 0.85, 1e-2)
-/// ```
-///
+/** Computes the Personalized PageRank using Forward Push.
+
+ In this version, no conversion from node to index takes place.
+ For the lookup of the neighbours of a node, it uses `edge_dict` (HashMap).
+ Although both HashMap and Vector lookups are **O(1)** in theory, the HashMap lookup is slower.
+ This version is almost twice slower than the vector versions ([forward_push_vec], [forward_push_vec_lazy]).
+ However, the vector takes extra space in memory that this version does not require.
+ Thus, this version is only suggested when the vector versions fail due to memory limitations.
+
+ # Arguments
+ * `edge_dict` - Dictionary mapping each node (positive integer) to the list of its neighbouring nodes (also positive integers).
+ * `source` - The node from which the PPR starts.
+ * `damping_factor` - The parameter that controls the probability of the random surfer to continue surfing. Typically 0.85.
+ * `r_max` - controls the precision of the calculation. The computation will stop when at most `r_max` residual probability is left in total in the nodes.
+ # Examples
+
+ ```Python
+ d = {3:[5, 1], 1:[3], 5:[3]}
+ source = 3
+ ppr = forward_push(d, source, 0.85, 1e-2)
+ ```
+**/
 pub fn forward_push(
     edge_dict: HashMap<u32, Vec<u32>>,
     source: u32,
@@ -460,7 +469,8 @@ pub fn forward_push(
 }
 
 #[pymodule]
-#[doc(hidden)]
+/**Implements algorithms to compute the Personalized Page Rank of nodes in a graph.
+**/
 fn rustpyppr(_py: Python, m: &PyModule) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(forward_push, m)?)?;
     m.add_function(wrap_pyfunction!(forward_push_vec, m)?)?;

@@ -31,8 +31,8 @@ use std::thread;
 #[text_signature = "(edge_dict, sources, damping_factor, r_max)"]
 /// Performs multiple forward push ppr on the same graph with different sources.
 ///
-/// The result is equivalent to calling the regular forward_push_ppr function sequentially.
-/// However, the results are computed in parallel. Performs parallel calls to [forward_push_ppr_vec].
+/// The result is equivalent to calling the regular forward_push function sequentially.
+/// However, the results are computed in parallel. Performs parallel calls to [forward_push_vec].
 /// # Arguments
 /// * `edge_dict` - Dictionary mapping each node (positive integer) to the list of its neighbouring nodes (also positive integers).
 /// * `sources` - The list of nodes from which the PPR computations start.
@@ -43,9 +43,9 @@ use std::thread;
 /// ```Python
 /// d = {3:[5, 1], 1:[3], 5:[3]}
 /// sources = [3, 5]
-/// ppr = multiple_forward_push_ppr_vec(d, sources, 0.85, 1e-2)
+/// ppr = multiple_forward_push_vec(d, sources, 0.85, 1e-2)
 /// ```
-pub fn multiple_forward_push_ppr_vec(
+pub fn multiple_forward_push_vec(
     edge_dict: HashMap<u32, Vec<u32>>,
     sources: Vec<u32>,
     damping_factor: f64,
@@ -63,7 +63,7 @@ pub fn multiple_forward_push_ppr_vec(
         let handle = thread::spawn(move || {
             let mut results = Vec::with_capacity(chunk_size);
             for source in chunk {
-                let p = _forward_push_ppr_vec(&ref_edge_dict, source, damping_factor, r_max);
+                let p = _forward_push_vec(&ref_edge_dict, source, damping_factor, r_max);
                 results.push((source, p));
             }
             results
@@ -82,8 +82,8 @@ pub fn multiple_forward_push_ppr_vec(
 #[text_signature = "(edge_dict, sources, damping_factor, r_max)"]
 /// Performs multiple forward push ppr on the same graph with different sources.
 ///
-/// The result is equivalent to calling the regular forward_push_ppr function sequentially.
-/// However, the results are computed in parallel. Performs parallel calls to [forward_push_ppr_vec_lazy].
+/// The result is equivalent to calling the regular forward_push function sequentially.
+/// However, the results are computed in parallel. Performs parallel calls to [forward_push_vec_lazy].
 /// # Arguments
 /// * `edge_dict` - Dictionary mapping each node (positive integer) to the list of its neighbouring nodes (also positive integers).
 /// * `sources` - The list of nodes from which the PPR computations start.
@@ -94,9 +94,9 @@ pub fn multiple_forward_push_ppr_vec(
 /// ```Python
 /// d = {3:[5, 1], 1:[3], 5:[3]}
 /// sources = [3, 5]
-/// ppr = multiple_forward_push_ppr_vec_lazy(d, sources, 0.85, 1e-2)
+/// ppr = multiple_forward_push_vec_lazy(d, sources, 0.85, 1e-2)
 /// ```
-pub fn multiple_forward_push_ppr_vec_lazy(
+pub fn multiple_forward_push_vec_lazy(
     edge_dict: HashMap<u32, Vec<u32>>,
     sources: Vec<u32>,
     damping_factor: f64,
@@ -114,7 +114,7 @@ pub fn multiple_forward_push_ppr_vec_lazy(
         let handle = thread::spawn(move || {
             let mut results = Vec::with_capacity(chunk_size);
             for source in chunk {
-                let p = _forward_push_ppr_vec_lazy(&ref_edge_dict, source, damping_factor, r_max);
+                let p = _forward_push_vec_lazy(&ref_edge_dict, source, damping_factor, r_max);
                 results.push((source, p));
             }
             results
@@ -134,7 +134,7 @@ pub fn multiple_forward_push_ppr_vec_lazy(
 /// Computes the Personalized PageRank using Forward Push.
 ///
 /// Nodes that are visited are converted in indices, allowing fast lookup using a vector instead of HashMap.
-/// This conversion is done for all nodes eagerly. See [forward_push_ppr_vec_lazy] for the lazy version.
+/// This conversion is done for all nodes eagerly. See [forward_push_vec_lazy] for the lazy version.
 /// # Arguments
 /// * `edge_dict` - Dictionary mapping each node (positive integer) to the list of its neighbouring nodes (also positive integers).
 /// * `source` - The node from which the PPR starts.
@@ -145,16 +145,16 @@ pub fn multiple_forward_push_ppr_vec_lazy(
 /// ```Python
 /// d = {3:[5, 1], 1:[3], 5:[3]}
 /// source = 3
-/// ppr = forward_push_ppr_vec(d, source, 0.85, 1e-2)
+/// ppr = forward_push_vec(d, source, 0.85, 1e-2)
 /// ```
 ///
-pub fn forward_push_ppr_vec(
+pub fn forward_push_vec(
     edge_dict: HashMap<u32, Vec<u32>>,
     source: u32,
     damping_factor: f64,
     r_max: f64,
 ) -> PyResult<HashMap<u32, f64>> {
-    Ok(_forward_push_ppr_vec(
+    Ok(_forward_push_vec(
         &edge_dict,
         source,
         damping_factor,
@@ -177,7 +177,7 @@ pub fn forward_push_ppr_vec(
 //     }
 // }
 
-fn _forward_push_ppr_vec(
+fn _forward_push_vec(
     edge_dict: &HashMap<u32, Vec<u32>>,
     source: u32,
     damping_factor: f64,
@@ -249,7 +249,7 @@ fn _forward_push_ppr_vec(
 ///
 /// Nodes that are visited are converted in indices, allowing fast lookup using a vector instead of HashMap.
 /// This conversion is done for only for the nodes the algorithm encounters, in a lazy way.
-/// See [forward_push_ppr_vec] for the eager version.
+/// See [forward_push_vec] for the eager version.
 ///
 /// # Arguments
 /// * `edge_dict` - Dictionary mapping each node (positive integer) to the list of its neighbouring nodes (also positive integers).
@@ -261,16 +261,16 @@ fn _forward_push_ppr_vec(
 /// ```Python3
 /// d = {3:[5, 1], 1:[3], 5:[3]}
 /// source = 3
-/// ppr = forward_push_ppr_vec_lazy(d, source, 0.85, 1e-2)
+/// ppr = forward_push_vec_lazy(d, source, 0.85, 1e-2)
 /// ```
 ///
-pub fn forward_push_ppr_vec_lazy(
+pub fn forward_push_vec_lazy(
     edge_dict: HashMap<u32, Vec<u32>>,
     source: u32,
     damping_factor: f64,
     r_max: f64,
 ) -> PyResult<HashMap<u32, f64>> {
-    Ok(_forward_push_ppr_vec_lazy(
+    Ok(_forward_push_vec_lazy(
         &edge_dict,
         source,
         damping_factor,
@@ -279,7 +279,7 @@ pub fn forward_push_ppr_vec_lazy(
 }
 
 #[inline]
-fn _forward_push_ppr_vec_lazy(
+fn _forward_push_vec_lazy(
     edge_dict: &HashMap<u32, Vec<u32>>,
     source: u32,
     damping_factor: f64,
@@ -403,7 +403,7 @@ fn update_edge_list(
 /// In this version, no conversion from node to index takes place.
 /// For the lookup of the neighbours of a node, it uses `edge_dict` (HashMap).
 /// Although both HashMap and Vector lookups are **O(1)** in theory, the HashMap lookup is slower.
-/// This version is almost twice slower than the vector versions ([forward_push_ppr_vec], [forward_push_ppr_vec_lazy]).
+/// This version is almost twice slower than the vector versions ([forward_push_vec], [forward_push_vec_lazy]).
 /// However, the vector takes extra space in memory that this version does not require.
 /// Thus, this version is only suggested when the vector versions fail due to memory limitations.
 ///
@@ -417,10 +417,10 @@ fn update_edge_list(
 /// ```Python
 /// d = {3:[5, 1], 1:[3], 5:[3]}
 /// source = 3
-/// ppr = forward_push_ppr(d, source, 0.85, 1e-2)
+/// ppr = forward_push(d, source, 0.85, 1e-2)
 /// ```
 ///
-pub fn forward_push_ppr(
+pub fn forward_push(
     edge_dict: HashMap<u32, Vec<u32>>,
     source: u32,
     damping_factor: f64,
@@ -462,11 +462,11 @@ pub fn forward_push_ppr(
 #[pymodule]
 #[doc(hidden)]
 fn rustpyppr(_py: Python, m: &PyModule) -> PyResult<()> {
-    m.add_function(wrap_pyfunction!(forward_push_ppr, m)?)?;
-    m.add_function(wrap_pyfunction!(forward_push_ppr_vec, m)?)?;
-    m.add_function(wrap_pyfunction!(forward_push_ppr_vec_lazy, m)?)?;
-    m.add_function(wrap_pyfunction!(multiple_forward_push_ppr_vec, m)?)?;
-    m.add_function(wrap_pyfunction!(multiple_forward_push_ppr_vec_lazy, m)?)?;
+    m.add_function(wrap_pyfunction!(forward_push, m)?)?;
+    m.add_function(wrap_pyfunction!(forward_push_vec, m)?)?;
+    m.add_function(wrap_pyfunction!(forward_push_vec_lazy, m)?)?;
+    m.add_function(wrap_pyfunction!(multiple_forward_push_vec, m)?)?;
+    m.add_function(wrap_pyfunction!(multiple_forward_push_vec_lazy, m)?)?;
 
     Ok(())
 }

@@ -10,6 +10,7 @@ This means that given a source node, it is possible to compute the PPR scores of
 Extension to multiple sources is likely to happen soon.
 
 !*/
+use num_cpus;
 use pyo3::prelude::*;
 use pyo3::wrap_pyfunction;
 use std::collections::{HashMap, HashSet};
@@ -68,8 +69,8 @@ pub fn multiple_forward_push_vec(
     let edge_dict = Arc::new(edge_dict);
     let num_sources = sources.len();
     let mut join_handles = Vec::with_capacity(num_sources);
-    let num_threads = 8; // the least between the two
-    let chunk_size = (num_sources as f32 / num_threads as f32).ceil() as usize;
+    let num_threads = num_cpus::get();
+    let chunk_size = (num_sources as f32 / num_threads as f32).floor().max(1.0) as usize;
     let chunks: Vec<&[u32]> = sources.chunks(chunk_size).collect();
     for chunk in chunks {
         let ref_edge_dict = Arc::clone(&edge_dict);
@@ -119,7 +120,7 @@ pub fn multiple_forward_push_vec_lazy(
     let edge_dict = Arc::new(edge_dict);
     let num_sources = sources.len();
     let mut join_handles = Vec::with_capacity(num_sources);
-    let num_threads = 8; // the least between the two
+    let num_threads = num_cpus::get();
     let chunk_size = (num_sources as f32 / num_threads as f32).floor().max(1.0) as usize;
     let chunks: Vec<&[u32]> = sources.chunks(chunk_size).collect();
     for chunk in chunks {
@@ -469,8 +470,6 @@ pub fn forward_push(
 }
 
 #[pymodule]
-/**Implements algorithms to compute the Personalized Page Rank of nodes in a graph.
-**/
 fn rustpyppr(_py: Python, m: &PyModule) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(forward_push, m)?)?;
     m.add_function(wrap_pyfunction!(forward_push_vec, m)?)?;

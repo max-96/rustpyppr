@@ -15,6 +15,7 @@ use pyo3::prelude::*;
 use pyo3::wrap_pyfunction;
 use std::collections::{HashMap, HashSet};
 use std::mem;
+use std::slice;
 use std::sync::Arc;
 use std::thread;
 
@@ -66,10 +67,12 @@ pub fn multiple_forward_push_vec(
     damping_factor: f64,
     r_max: f64,
 ) -> PyResult<HashMap<u32, HashMap<u32, f64>>> {
+    // make the edge_dict shareable across threads
     let edge_dict = Arc::new(edge_dict);
     let num_sources = sources.len();
     let mut join_handles = Vec::with_capacity(num_sources);
-    let num_threads = num_cpus::get();
+    let num_threads = num_cpus::get(); // number of threads to spawn
+
     let chunk_size = (num_sources as f32 / num_threads as f32).floor().max(1.0) as usize;
     let chunks: Vec<&[u32]> = sources.chunks(chunk_size).collect();
     for chunk in chunks {
@@ -337,21 +340,21 @@ fn _forward_push_vec_lazy(
         for k in grown_copy {
             let neighbourhood = &edge_list[k];
             let neighbourhood = match neighbourhood {
-                None => {
-                    update_edge_list(
-                        k,
-                        &edge_dict,
-                        &mut index_to_name,
-                        &mut name_to_index,
-                        &mut edge_list,
-                        &mut p,
-                        &mut r,
-                    );
-                    edge_list[k].as_ref().unwrap()
-                }
-                Some(n) => n,
+                None => update_edge_list(
+                    k,
+                    &edge_dict,
+                    &mut index_to_name,
+                    &mut name_to_index,
+                    &mut edge_list,
+                    &mut p,
+                    &mut r,
+                ),
+                Some(n) => n.as_slice(),
             };
-            let res = mem::take(&mut r[k]);
+            /*removes it from memory and replaces it with 0.0. Equivalent to
+             * `let res = r[k]; r[k] = 0.0;` but faster.
+             */
+            let res = mem::take(&mut r[k]); //
 
             let add_p = (1.0 - damping_factor) * res;
             p[k] += add_p;
@@ -373,37 +376,52 @@ fn _forward_push_vec_lazy(
 }
 
 // function to update the bookkeeping dictionary and the other things in the lazy way
-fn update_edge_list(
+fn update_edge_list<'a>(
     node: usize,
     edge_dict: &HashMap<u32, Vec<u32>>,
     index_to_name: &mut Vec<u32>,
     name_to_index: &mut HashMap<u32, usize>,
-    edge_list: &mut Vec<Option<Vec<usize>>>,
+    edge_list: &'a mut Vec<Option<Vec<usize>>>,
     p: &mut Vec<f64>,
     r: &mut Vec<f64>,
-) -> () {
+) -> &'a [usize] {
     //get name
     let node_name = index_to_name[node];
-
+    // how many neighbours does the node have
     let additional = edge_dict[&node_name].len();
     let mut neighbours = Vec::with_capacity(additional);
-    for v_name in &edge_dict[&node_name] {
-        if name_to_index.contains_key(v_name) {
+    for &v_name in &edge_dict[&node_name] {
+        if name_to_index.contains_key(&v_name) {
+            // the neighbour is known
             //no update necessary
-            let v = name_to_index[v_name];
+            let v = name_to_index[&v_name];
             neighbours.push(v);
         } else {
-            let v = index_to_name.len();
-            index_to_name.push(*v_name);
-            name_to_index.insert(*v_name, v);
+            //new neighbour, need to create the entry
+            let v = index_to_name.len(); // the index of the neighbour
+                                         //mapping the neighbour to its name
+            index_to_name.push(v_name);
+            name_to_index.insert(v_name, v);
+            // saving the neighbour in the neighbours vector
             neighbours.push(v);
+            // adding empty entries for the neighbour v
             edge_list.push(Option::None);
             p.push(0.0);
             r.push(0.0);
         }
     }
-    edge_list[node] = Option::Some(neighbours);
-    // return &edge_list[node].expect("missing but just inserted");
+    /* Ideally, we would like to return a reference to the vector `neighbours`.
+     * However, this is hard to do with the rules of rust, as we lose ownership of `neighbours`
+     * when we insert it in `edge_list`. However, we know that in the `mother` function, this
+     * reference will live for a shorter time than the reference to `edge_list`, since it will
+     * be consumed in the for loop while the reference to edge_list will live longer. Also, does not
+     * depend on the reallocation of edge_list in case it has too many elements. Therefore we return
+     * an immutable slice of the neighbours.
+     */
+    let vec_pointer = neighbours.as_ptr();
+    let length = neighbours.len();
+    edge_list[node] = Some(neighbours);
+    unsafe { slice::from_raw_parts(vec_pointer, length) }
 }
 
 #[pyfunction]

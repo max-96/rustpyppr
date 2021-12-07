@@ -11,6 +11,7 @@ Extension to multiple sources is likely to happen soon.
 
 !*/
 use num_cpus;
+use pyo3::exceptions::{PyKeyError, PyValueError};
 use pyo3::prelude::*;
 use pyo3::wrap_pyfunction;
 use std::collections::{HashMap, HashSet};
@@ -45,22 +46,23 @@ use std::thread;
 
 #[pyfunction]
 #[text_signature = "(edge_dict, sources, damping_factor, r_max)"]
-/// Performs multiple forward push ppr on the same graph with different sources.
-///
-/// The result is equivalent to calling the regular forward_push function sequentially.
-/// However, the results are computed in parallel. Performs parallel calls to [forward_push_vec].
-/// # Arguments
-/// * `edge_dict` - Dictionary mapping each node (positive integer) to the list of its neighbouring nodes (also positive integers).
-/// * `sources` - The list of nodes from which the PPR computations start.
-/// * `damping_factor` - The parameter that controls the probability of the random surfer to continue surfing. Typically 0.85.
-/// * `r_max` - controls the precision of the calculation. The computation will stop when at most `r_max` residual probability is left in total in the nodes.
-/// # Examples
-///
-/// ```Python
-/// d = {3:[5, 1], 1:[3], 5:[3]}
-/// sources = [3, 5]
-/// ppr = multiple_forward_push_vec(d, sources, 0.85, 1e-2)
-/// ```
+/** Performs multiple forward push ppr on the same graph with different sources.
+
+   The result is equivalent to calling the regular forward_push function sequentially.
+   However, the results are computed in parallel. Performs parallel calls to [forward_push_vec].
+   # Arguments
+   * `edge_dict` - Dictionary mapping each node (positive integer) to the list of its neighbouring nodes (also positive integers).
+   * `sources` - The list of nodes from which the PPR computations start.
+   * `damping_factor` - The parameter that controls the probability of the random surfer to continue surfing. Typically 0.85.
+   * `r_max` - controls the precision of the calculation. The computation will stop when at most `r_max` residual probability is left in total in the nodes.
+   # Examples
+
+   ```Python
+   d = {3:[5, 1], 1:[3], 5:[3]}
+   sources = [3, 5]
+   ppr = multiple_forward_push_vec(d, sources, 0.85, 1e-2)
+   ```
+**/
 pub fn multiple_forward_push_vec(
     edge_dict: HashMap<u32, Vec<u32>>,
     sources: Vec<u32>,
@@ -98,22 +100,22 @@ pub fn multiple_forward_push_vec(
 
 #[pyfunction]
 #[text_signature = "(edge_dict, sources, damping_factor, r_max)"]
-/// Performs multiple forward push ppr on the same graph with different sources.
-///
-/// The result is equivalent to calling the regular forward_push function sequentially.
-/// However, the results are computed in parallel. Performs parallel calls to [forward_push_vec_lazy].
-/// # Arguments
-/// * `edge_dict` - Dictionary mapping each node (positive integer) to the list of its neighbouring nodes (also positive integers).
-/// * `sources` - The list of nodes from which the PPR computations start.
-/// * `damping_factor` - The parameter that controls the probability of the random surfer to continue surfing. Typically 0.85.
-/// * `r_max` - controls the precision of the calculation. The computation will stop when at most `r_max` residual probability is left in total in the nodes.
-/// # Examples
-///
-/// ```Python
-/// d = {3:[5, 1], 1:[3], 5:[3]}
-/// sources = [3, 5]
-/// ppr = multiple_forward_push_vec_lazy(d, sources, 0.85, 1e-2)
-/// ```
+/**Performs multiple forward push ppr on the same graph with different sources.
+
+The result is equivalent to calling the regular forward_push function sequentially.
+However, the results are computed in parallel. Performs parallel calls to [forward_push_vec_lazy].
+# Arguments
+* `edge_dict` - Dictionary mapping each node (positive integer) to the list of its neighbouring nodes (also positive integers).
+* `sources` - The list of nodes from which the PPR computations start.
+* `damping_factor` - The parameter that controls the probability of the random surfer to continue surfing. Typically 0.85.
+* `r_max` - controls the precision of the calculation. The computation will stop when at most `r_max` residual probability is left in total in the nodes.
+# Examples
+
+```Python
+d = {3:[5, 1], 1:[3], 5:[3]}
+sources = [3, 5]
+ppr = multiple_forward_push_vec_lazy(d, sources, 0.85, 1e-2)
+``` **/
 pub fn multiple_forward_push_vec_lazy(
     edge_dict: HashMap<u32, Vec<u32>>,
     sources: Vec<u32>,
@@ -172,6 +174,10 @@ pub fn forward_push_vec(
     damping_factor: f64,
     r_max: f64,
 ) -> PyResult<HashMap<u32, f64>> {
+    let sanity = check_arguments(&edge_dict, source, damping_factor, r_max);
+    if sanity.is_some() {
+        return Err(sanity.unwrap());
+    }
     Ok(_forward_push_vec(&edge_dict, source, damping_factor, r_max))
 }
 // struct Buffer {
@@ -283,6 +289,10 @@ pub fn forward_push_vec_lazy(
     damping_factor: f64,
     r_max: f64,
 ) -> PyResult<HashMap<u32, f64>> {
+    let sanity = check_arguments(&edge_dict, source, damping_factor, r_max);
+    if sanity.is_some() {
+        return Err(sanity.unwrap());
+    }
     Ok(_forward_push_vec_lazy(
         &edge_dict,
         source,
@@ -454,6 +464,12 @@ pub fn forward_push(
     damping_factor: f64,
     r_max: f64,
 ) -> PyResult<HashMap<u32, f64>> {
+    // sanity checks
+    let sanity = check_arguments(&edge_dict, source, damping_factor, r_max);
+    if sanity.is_some() {
+        return Err(sanity.unwrap());
+    }
+
     let r_max = r_max.max(f64::EPSILON); // cap the r_max to epsilon
                                          //println!("{} {} {}", source, damping_factor, r_max);
     let conversion_coefficient = 1.0 - damping_factor;
@@ -485,6 +501,33 @@ pub fn forward_push(
         }
     }
     Ok(p)
+}
+
+fn check_arguments(
+    edge_dict: &HashMap<u32, Vec<u32>>,
+    source: u32,
+    damping_factor: f64,
+    r_max: f64,
+) -> Option<PyErr> {
+    if !edge_dict.contains_key(&source) {
+        return Some(PyKeyError::new_err(format!(
+            "source {} not found in edge_dict",
+            source
+        )));
+    }
+    if damping_factor >= 1.0 || damping_factor <= 0.0 {
+        return Some(PyValueError::new_err(format!(
+            "damping_factor {} not in bounds 0 < x < 1",
+            damping_factor
+        )));
+    }
+    if r_max >= 1.0 || r_max <= 0.0 {
+        return Some(PyValueError::new_err(format!(
+            "r_max {} not in bounds 0 < x < 1",
+            r_max
+        )));
+    }
+    None
 }
 
 #[pymodule]

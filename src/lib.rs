@@ -20,6 +20,8 @@ use std::slice;
 use std::sync::Arc;
 use std::thread;
 
+const DEFAULT_DAMPING_FACTOR: f64 = 0.85;
+const DEFAULT_R_MAX: f64 = 1e-3;
 // Rust Implementation of Personalized Page Rank algorithms for Python 3
 
 /*
@@ -66,9 +68,11 @@ use std::thread;
 pub fn multiple_forward_push_vec(
     edge_dict: HashMap<u32, Vec<u32>>,
     sources: Vec<u32>,
-    damping_factor: f64,
-    r_max: f64,
+    damping_factor: Option<f64>,
+    r_max: Option<f64>,
 ) -> PyResult<HashMap<u32, HashMap<u32, f64>>> {
+    let damping_factor: f64 = damping_factor.unwrap_or(DEFAULT_DAMPING_FACTOR);
+    let r_max: f64 = r_max.unwrap_or(DEFAULT_R_MAX);
     // make the edge_dict shareable across threads
     let edge_dict = Arc::new(edge_dict);
     let num_sources = sources.len();
@@ -119,9 +123,13 @@ ppr = multiple_forward_push_vec_lazy(d, sources, 0.85, 1e-2)
 pub fn multiple_forward_push_vec_lazy(
     edge_dict: HashMap<u32, Vec<u32>>,
     sources: Vec<u32>,
-    damping_factor: f64,
-    r_max: f64,
+    damping_factor: Option<f64>,
+    r_max: Option<f64>,
 ) -> PyResult<HashMap<u32, HashMap<u32, f64>>> {
+    // get default if not defined
+    let damping_factor: f64 = damping_factor.unwrap_or(DEFAULT_DAMPING_FACTOR);
+    let r_max: f64 = r_max.unwrap_or(DEFAULT_R_MAX);
+
     let edge_dict = Arc::new(edge_dict);
     let num_sources = sources.len();
     let mut join_handles = Vec::with_capacity(num_sources);
@@ -171,9 +179,13 @@ pub fn multiple_forward_push_vec_lazy(
 pub fn forward_push_vec(
     edge_dict: HashMap<u32, Vec<u32>>,
     source: u32,
-    damping_factor: f64,
-    r_max: f64,
+    damping_factor: Option<f64>,
+    r_max: Option<f64>,
 ) -> PyResult<HashMap<u32, f64>> {
+    // get default if not defined
+    let damping_factor: f64 = damping_factor.unwrap_or(DEFAULT_DAMPING_FACTOR);
+    let r_max: f64 = r_max.unwrap_or(DEFAULT_R_MAX);
+
     let sanity = check_arguments(&edge_dict, source, damping_factor, r_max);
     if sanity.is_some() {
         return Err(sanity.unwrap());
@@ -286,9 +298,13 @@ fn _forward_push_vec(
 pub fn forward_push_vec_lazy(
     edge_dict: HashMap<u32, Vec<u32>>,
     source: u32,
-    damping_factor: f64,
-    r_max: f64,
+    damping_factor: Option<f64>,
+    r_max: Option<f64>,
 ) -> PyResult<HashMap<u32, f64>> {
+    // defaults if not defined
+    let damping_factor: f64 = damping_factor.unwrap_or(DEFAULT_DAMPING_FACTOR);
+    let r_max: f64 = r_max.unwrap_or(DEFAULT_R_MAX);
+
     let sanity = check_arguments(&edge_dict, source, damping_factor, r_max);
     if sanity.is_some() {
         return Err(sanity.unwrap());
@@ -461,9 +477,11 @@ fn update_edge_list<'a>(
 pub fn forward_push(
     edge_dict: HashMap<u32, Vec<u32>>,
     source: u32,
-    damping_factor: f64,
-    r_max: f64,
+    damping_factor: Option<f64>,
+    r_max: Option<f64>,
 ) -> PyResult<HashMap<u32, f64>> {
+    let damping_factor: f64 = damping_factor.unwrap_or(DEFAULT_DAMPING_FACTOR);
+    let r_max: f64 = r_max.unwrap_or(DEFAULT_R_MAX);
     // sanity checks
     let sanity = check_arguments(&edge_dict, source, damping_factor, r_max);
     if sanity.is_some() {

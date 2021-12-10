@@ -3,8 +3,8 @@ from typing import Dict, List
 
 def forward_push(edge_dict: Dict[int, List[int]],
                  source: int,
-                 damping_factor: float,
-                 r_max: float) -> Dict[int, float]:
+                 damping_factor: float = 0.85,
+                 r_max: float = 1e-3) -> Dict[int, float]:
     """Computes the Personalized PageRank using Forward Push.
 
      In this version, no conversion from node to index takes place.
@@ -31,8 +31,8 @@ def forward_push(edge_dict: Dict[int, List[int]],
 
 def forward_push_vec(edge_dict: Dict[int, List[int]],
                      source: int,
-                     damping_factor: float,
-                     r_max: float) -> Dict[int, float]:
+                     damping_factor: float = 0.85,
+                     r_max: float = 1e-3) -> Dict[int, float]:
     """Computes the Personalized PageRank using Forward Push, using vectors.
 
      Nodes that are visited are converted in indices, allowing fast lookup using a vector instead of HashMap.
@@ -54,8 +54,8 @@ def forward_push_vec(edge_dict: Dict[int, List[int]],
 
 def forward_push_vec_lazy(edge_dict: Dict[int, List[int]],
                           source: int,
-                          damping_factor: float,
-                          r_max: float) -> Dict[int, float]:
+                          damping_factor: float = 0.85,
+                          r_max: float = 1e-3) -> Dict[int, float]:
     """Computes the Personalized PageRank using Forward Push, using vectors lazily.
 
      Nodes that are visited are converted in indices, allowing fast lookup using a vector instead of HashMap.
@@ -79,8 +79,8 @@ def forward_push_vec_lazy(edge_dict: Dict[int, List[int]],
 
 def multiple_forward_push_vec(edge_dict: Dict[int, List[int]],
                               sources: List[int],
-                              damping_factor: float,
-                              r_max: float) -> Dict[int, Dict[int, float]]:
+                              damping_factor: float = 0.85,
+                              r_max: float = 1e-3) -> Dict[int, Dict[int, float]]:
     """Performs multiple forward push ppr on the same graph with different sources.
 
        The result is logically equivalent to calling the regular forward_push_vec function sequentially.
@@ -101,8 +101,8 @@ def multiple_forward_push_vec(edge_dict: Dict[int, List[int]],
 
 def multiple_forward_push_vec_lazy(edge_dict: Dict[int, List[int]],
                                    sources: List[int],
-                                   damping_factor: float,
-                                   r_max: float) -> Dict[int, Dict[int, float]]:
+                                   damping_factor: float = 0.85,
+                                   r_max: float = 1e-3) -> Dict[int, Dict[int, float]]:
     """Performs multiple forward push ppr on the same graph with different sources.
 
     The result is logically equivalent to calling the regular forward_push function sequentially.

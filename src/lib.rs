@@ -261,10 +261,16 @@ fn _forward_push_vec(
             avail_mass -= add_p;
 
             let neighbourhood = &edge_list[k];
-            let w = (damping_factor * res) / (neighbourhood.len() as f64);
-            for &u in neighbourhood {
-                r[u] += w;
-                grown.insert(u);
+
+            if neighbourhood.is_empty() {
+                r[source_index] += res - add_p;
+                grown.insert(source_index);
+            } else {
+                let w = (damping_factor * res) / (neighbourhood.len() as f64);
+                for &u in neighbourhood {
+                    r[u] += w;
+                    grown.insert(u);
+                }
             }
         }
     }
@@ -386,12 +392,16 @@ fn _forward_push_vec_lazy(
             p[k] += add_p;
             avail_mass -= add_p;
 
-            //let neighbourhood = &edge_list[k];
-            let w = (damping_factor * res) / (neighbourhood.len() as f64);
-            for &u in neighbourhood {
-                // println!("{}", u);
-                r[u] += w;
-                grown.insert(u);
+            if neighbourhood.is_empty() {
+                r[0] += res - add_p;
+                grown.insert(0);
+            } else {
+                let w = (damping_factor * res) / (neighbourhood.len() as f64);
+                for &u in neighbourhood {
+                    // println!("{}", u);
+                    r[u] += w;
+                    grown.insert(u);
+                }
             }
         }
     }
@@ -411,29 +421,34 @@ fn update_edge_list<'a>(
     p: &mut Vec<f64>,
     r: &mut Vec<f64>,
 ) -> &'a [usize] {
-    //get name
+    // get name
     let node_name = index_to_name[node];
     // how many neighbours does the node have
-    let additional = edge_dict[&node_name].len();
+    let additional = match edge_dict.get(&node_name) {
+        Some(x) => x.len(),
+        None => 0,
+    };
     let mut neighbours = Vec::with_capacity(additional);
-    for &v_name in &edge_dict[&node_name] {
-        if name_to_index.contains_key(&v_name) {
-            // the neighbour is known
-            //no update necessary
-            let v = name_to_index[&v_name];
-            neighbours.push(v);
-        } else {
-            //new neighbour, need to create the entry
-            let v = index_to_name.len(); // the index of the neighbour
-                                         //mapping the neighbour to its name
-            index_to_name.push(v_name);
-            name_to_index.insert(v_name, v);
-            // saving the neighbour in the neighbours vector
-            neighbours.push(v);
-            // adding empty entries for the neighbour v
-            edge_list.push(Option::None);
-            p.push(0.0);
-            r.push(0.0);
+    if additional > 0 {
+        for &v_name in edge_dict[&node_name].iter() {
+            if name_to_index.contains_key(&v_name) {
+                // the neighbour is known
+                //no update necessary
+                let v = name_to_index[&v_name];
+                neighbours.push(v);
+            } else {
+                //new neighbour, need to create the entry
+                let v = index_to_name.len(); // the index of the neighbour
+                                             //mapping the neighbour to its name
+                index_to_name.push(v_name);
+                name_to_index.insert(v_name, v);
+                // saving the neighbour in the neighbours vector
+                neighbours.push(v);
+                // adding empty entries for the neighbour v
+                edge_list.push(Option::None);
+                p.push(0.0);
+                r.push(0.0);
+            }
         }
     }
     /* Ideally, we would like to return a reference to the vector `neighbours`.
